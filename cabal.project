@@ -1,0 +1,4 @@
+with-compiler: ghc-8.10.4
+packages: .
+
+constraints: ghc-lib-parser-ex -no-ghc-lib -auto
