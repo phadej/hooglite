@@ -14,6 +14,7 @@ import Data.Char                      (toLower)
 import Data.Either                    (isRight)
 import Data.Functor.Identity          (Identity (..))
 import Data.List                      (isInfixOf)
+import Data.Maybe                     (isJust)
 import Distribution.ModuleName        (ModuleName)
 import Distribution.Types.PackageName (PackageName)
 import Distribution.Types.Version     (Version)
@@ -72,10 +73,24 @@ query (DB entries) (QueryType qty _) =
     [ e
     | e@(Entry _pn _ver _mn _name decl) <- entries
     , case decl of
-        SigD (Just ty) _ -> subsumesTy qty ty
-        ConD (Just ty) _ -> subsumesTy qty ty
+        SigD (Just ty) _ -> matchTy qty ty
+        ConD (Just ty) _ -> matchTy qty ty
         _                -> False
     ]
+
+-- | A simple heuristic:
+--
+-- If user asks for a type without free variables, like a -> a
+-- we search for types which subsumes it: a -> a, a -> b...
+--
+-- Otherwise, we look other way around.
+--
+matchTy :: Ty -> Ty -> Bool
+matchTy qty ty
+    | closed qty = subsumesTy ty qty
+    | otherwise  = subsumesTy qty ty
+  where
+    closed = isJust . traverse (const Nothing)
 
 -------------------------------------------------------------------------------
 -- Unification

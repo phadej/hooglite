@@ -1,12 +1,13 @@
 module Hooglite.Ty where
 
-import Control.Monad    (join)
-import Data.Char        (isLower)
-import Data.List        (nub)
-import Data.Maybe       (mapMaybe)
-import Data.String      (fromString)
-import GHC.Hs.Extension (GhcPs)
-import GHC.Types.SrcLoc (GenLocated (L))
+import Control.Monad         (join)
+import Data.Char             (isLower)
+import Data.List             (nub)
+import Data.Maybe            (mapMaybe)
+import Data.String           (fromString)
+import GHC.Hs.Extension      (GhcPs)
+import GHC.Types.Name.Reader (RdrName)
+import GHC.Types.SrcLoc      (GenLocated (L), Located)
 
 import qualified Data.Text.Short as ST
 import qualified GHC.Hs.Type     as GHC
@@ -49,18 +50,22 @@ convType = go where
     -- look at
     -- https://hackage.haskell.org/package/ghc-lib-parser-9.0.2.20211226/docs/GHC-Hs-Type.html#t:HsType
     go :: GHC.LHsType GhcPs -> Maybe Ty
-    go (L _ (GHC.HsParTy _ a))         = go a
-    go (L _ (GHC.HsFunTy _ _ a b))     = join $ arr_ <$> go a <*> go b
-    go (L _ (GHC.HsAppTy _ a b))       = join $ app_ <$> go a <*> go b
-    go (L _ (GHC.HsAppKindTy _ a b))   = join $ app_ <$> go a <*> go b
-    go (L _ (GHC.HsStarTy _ _))        = Just "*"
-    go (L _ (GHC.HsKindSig _ a _))     = go a
-    go (L _ (GHC.HsTyVar _ _ (L _ n))) = Just (Mono (Free (toName n)))
-    go (L _ (GHC.HsQualTy _ _ b))      = go b -- we forget about constraints.
-    go (L _ (GHC.HsForAllTy _ xs y))   = forallTeles xs <$> go y
-    go (L _ (GHC.HsListTy _ a))        = join $ app_ "List" <$> go a
-    go (L _ (GHC.HsTupleTy _ _ xs))    = apps_ (fromString (tupleName (length xs))) (mapMaybe go xs)
-    go (L _ ty)                        = Just (fromString (fakeShowPpr ty))
+    go (L _ (GHC.HsParTy _ a))        = go a
+    go (L _ (GHC.HsFunTy _ _ a b))    = join $ arr_ <$> go a <*> go b
+    go (L _ (GHC.HsAppTy _ a b))      = join $ app_ <$> go a <*> go b
+    go (L _ (GHC.HsOpTy _ a op b))    = join $ apps_ (var op) <$> traverse go [a, b]
+    go (L _ (GHC.HsAppKindTy _ a b))  = join $ app_ <$> go a <*> go b
+    go (L _ (GHC.HsStarTy _ _))       = Just "*"
+    go (L _ (GHC.HsKindSig _ a _))    = go a
+    go (L _ (GHC.HsTyVar _ _ x))      = Just (var x)
+    go (L _ (GHC.HsQualTy _ _ b))     = go b -- we forget about constraints.
+    go (L _ (GHC.HsForAllTy _ xs y))  = forallTeles xs <$> go y
+    go (L _ (GHC.HsListTy _ a))       = join $ app_ "List" <$> go a
+    go (L _ (GHC.HsTupleTy _ _ xs))   = apps_ (fromString (tupleName (length xs))) (mapMaybe go xs)
+    go (L _ ty)                       = Just (fromString (fakeShowPpr ty))
+
+    var :: Located RdrName -> Ty
+    var (L _ n) = Mono (Free (toName n))
 
     tupleName :: Int -> String
     tupleName 0 = "Unit"
