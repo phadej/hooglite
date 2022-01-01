@@ -6,6 +6,7 @@ module Hooglite.MonoPoly.Pretty (
     ppParen,
 ) where
 
+import Data.Char        (isAlphaNum)
 import Data.Void        (Void, absurd)
 import Text.PrettyPrint ((<+>))
 
@@ -38,7 +39,12 @@ instance Pretty Int where
     ppr i = "?" <> PP.int i
 
 instance Pretty Name where
-    ppr (Name t) = PP.text (ST.toString t)
+    ppr (Name t) = case s of
+        []                                          -> "_"
+        c:_ | isAlphaNum c || c == '_' || c == '\'' -> PP.text s
+        _                                           -> PP.parens (PP.text s)
+      where
+        s = ST.toString t
 
 instance Pretty () where
     ppr _ = "_"
