@@ -1,4 +1,4 @@
-with-compiler: ghc-8.10.4
+with-compiler: ghc-9.2.5
 packages: .
 
 constraints: ghc-lib-parser-ex -no-ghc-lib -auto
