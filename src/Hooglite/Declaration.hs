@@ -8,6 +8,7 @@ import GHC.Types.SrcLoc (GenLocated (L))
 import qualified GHC.Hs.Binds          as GHC
 import qualified GHC.Hs.Decls          as GHC
 import qualified GHC.Hs.Type           as GHC
+import qualified GHC.Types.SrcLoc      as GHC
 
 import Hooglite.GHC.Utils
 import Hooglite.MonoPoly.Name
@@ -58,19 +59,25 @@ sigToDeclaration :: GHC.Sig GhcPs -> (Name -> Declaration -> r) -> Either String
 sigToDeclaration (GHC.TypeSig x names ty) mk = Right
     [ mk (toName name) $ SigD (fmap genType $ convType ty') $ fakeShowPpr $ GHC.TypeSig x [L l name] ty
     | L l name <- names
-    , let ty' = GHC.hsib_body $ GHC.hswc_body ty
+    , let ty' = GHC.sig_body $ GHC.unLoc $ GHC.hswc_body ty :: GHC.LHsType GhcPs
     ]
 sigToDeclaration sig _ = Left $ "sigToDeclaration " ++ showAstData sig
 
 conToDeclaration :: GHC.ConDecl GhcPs -> (Name -> Declaration -> r) -> Either String [r]
-conToDeclaration d@GHC.ConDeclGADT { GHC.con_names = names, GHC.con_args = details, GHC.con_res_ty = ty } mk = Right
+conToDeclaration d@GHC.ConDeclGADT { GHC.con_names = names, GHC.con_g_args = details, GHC.con_res_ty = ty } mk = Right
     [ mk (toName name) $ ConD (fmap genType $ join $ apps_ <$> convType ty <*> details') (fakeShowPpr (d { GHC.con_names = [L l name] } ))
     | L l name <- names
     ]
   where
     details' :: Maybe [Ty]
     details' = sequence
-        [ convType arg
-        | GHC.HsScaled _ arg <- GHC.hsConDeclArgTys details
+        [ convType ty'
+        | ty' <- extractConDeclGADTDetailsTyVars details
         ]
 conToDeclaration d@GHC.ConDeclH98 {} _mk = Left $ "Haskell98 data decl" ++ showAstData d
+
+extractConDeclGADTDetailsTyVars ::
+  GHC.HsConDeclGADTDetails GhcPs -> [GHC.LHsType GhcPs]
+extractConDeclGADTDetailsTyVars con_args = case con_args of
+  GHC.PrefixConGADT args      -> map GHC.hsScaledThing args
+  GHC.RecConGADT (L _ flds) _ -> map (GHC.cd_fld_type . GHC.unLoc) $ flds

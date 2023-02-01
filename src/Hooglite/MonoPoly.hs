@@ -28,7 +28,7 @@ instance Applicative (Mono n) where
     (<*>) = ap
 
 instance Monad (Mono n) where
-    return = Free
+    return = pure
 
     Var x   >>= _ = Var x
     Free x  >>= k = k x
