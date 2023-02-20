@@ -1,4 +1,5 @@
-with-compiler: ghc-9.2.5
+with-compiler: ghc-9.2.6
 packages: .
+packages: debruijn
 
 constraints: ghc-lib-parser-ex -no-ghc-lib -auto

@@ -7,6 +7,7 @@ import Data.Maybe       (mapMaybe)
 import Data.String      (fromString)
 import GHC.Hs.Extension (GhcPs)
 import GHC.Types.SrcLoc (GenLocated (L))
+import DeBruijn
 
 import qualified Data.Text.Short as ST
 import qualified GHC.Hs.Type     as GHC
@@ -14,18 +15,18 @@ import qualified GHC.Hs.Type     as GHC
 import Hooglite.GHC.Utils
 import Hooglite.MonoPoly
 import Hooglite.MonoPoly.Name
-import Hooglite.MonoPoly.Var
+
 
 -------------------------------------------------------------------------------
 -- Our representation for types
 -------------------------------------------------------------------------------
 
-type Ty = Poly Z Name
+type Ty = Poly Name EmptyCtx
 
 genType :: Ty -> Ty
 genType ty = foldr forall_ ty xs where
     xs :: [Name]
-    xs = nub $ foldMap (\x -> if nameLooksLikeTyVar x then [x] else []) ty
+    xs = nub $ foldrPoly (\x acc -> if nameLooksLikeTyVar x then x : acc else acc) [] ty
 
 nameLooksLikeTyVar :: Name -> Bool
 nameLooksLikeTyVar (Name n) = case ST.uncons n of

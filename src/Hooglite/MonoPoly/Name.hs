@@ -1,3 +1,4 @@
+{-# LANGUAGE PolyKinds #-}
 module Hooglite.MonoPoly.Name (
     -- * Name
     Name (..),
@@ -15,7 +16,6 @@ module Hooglite.MonoPoly.Name (
 import Control.Monad.State   (State, evalState, get, modify', put)
 import Data.ByteString.Short (ShortByteString)
 import Data.Char             (isDigit)
-import Data.Foldable         (traverse_)
 import Data.Maybe            (fromMaybe)
 import Data.Set              (Set)
 import Data.String           (IsString (..))
@@ -83,8 +83,8 @@ newtype NameM a = NameM { unNameM :: State (Set Name) a }
 runNameM :: NameM a -> a
 runNameM (NameM m) = evalState m Set.empty
 
-usedNames :: (Foldable f, ToName a) => f a -> NameM ()
-usedNames xs = NameM (traverse_ (\n -> modify' (Set.insert (toName n))) xs)
+usedNames :: ToName a => [a] -> NameM ()
+usedNames xs = NameM $ modify' (Set.union (Set.fromList (map toName xs)))
 
 freshName :: Name -> NameM Name
 freshName n = NameM $ do

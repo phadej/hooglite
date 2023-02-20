@@ -8,12 +8,12 @@ module Hooglite.MonoPoly.Pretty (
 
 import Data.Void        (Void, absurd)
 import Text.PrettyPrint ((<+>))
+import DeBruijn         (Var, indexVar)
 
 import qualified Data.Text.Short  as ST
 import qualified Text.PrettyPrint as PP
 
 import Hooglite.MonoPoly.Name
-import Hooglite.MonoPoly.Var
 
 -------------------------------------------------------------------------------
 -- Pretty class

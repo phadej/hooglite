@@ -17,6 +17,7 @@ import Data.List                      (isInfixOf)
 import Distribution.ModuleName        (ModuleName)
 import Distribution.Types.PackageName (PackageName)
 import Distribution.Types.Version     (Version)
+import DeBruijn                       (EmptyCtx)
 
 import qualified Data.Map.Strict     as Map
 import qualified Data.Text.Short     as ST
@@ -27,7 +28,6 @@ import Hooglite.Haddock
 import Hooglite.MonoPoly
 import Hooglite.MonoPoly.Name
 import Hooglite.MonoPoly.Pretty
-import Hooglite.MonoPoly.Var
 import Hooglite.Query
 import Hooglite.Ty
 
@@ -81,32 +81,32 @@ query (DB entries) (QueryType qty _) =
 -- Unification
 -------------------------------------------------------------------------------
 
-type Unify = EitherKT (UFailure (MonoF Z Name) IntVar) (IntBindingT (MonoF Z Name) Identity)
+type Unify = EitherKT (UFailure (MonoF Name EmptyCtx) IntVar) (IntBindingT (MonoF Name EmptyCtx) Identity)
 
-runUnify :: Unify a -> Either (UFailure (MonoF Z Name) IntVar) a
+runUnify :: Unify a -> Either (UFailure (MonoF Name EmptyCtx) IntVar) a
 runUnify m = runIdentity (evalIntBindingT (runEitherKT m))
 
 subsumesTy :: Ty -> Ty -> Bool
 subsumesTy a b = isRight $ runUnify $ do
-    a' <- unwrap  (Left <$> a)
-    b' <- unwrap' (Left <$> b)
+    a' <- unwrap  (mapPoly Left a)
+    b' <- unwrap' (mapPoly Left b)
 
     ab <- unify (unroll a') (unroll b')
     _ab <- applyBindings ab
     return ()
 
-unwrap :: Poly n (Either f IntVar) -> Unify (Mono n (Either f IntVar) )
+unwrap :: Poly (Either f IntVar) ctx -> Unify (Mono (Either f IntVar) ctx)
 unwrap (Mono a)    = return a
 unwrap (Poly _n a) = do
     x <- lift freeVar
     unwrap (instantiate (Free (Right x)) a)
 
-unwrap' :: Poly n (Either Name v) -> Unify (Mono n (Either Name v))
+unwrap' :: Poly (Either Name v) ctx -> Unify (Mono (Either Name v) ctx)
 unwrap' (Mono a)           = return a
 unwrap' (Poly (IName n) a) = do
     unwrap' (instantiate (Free (Left n)) a)
 
-unroll :: Mono n (Either f IntVar) -> UTerm (MonoF n f) IntVar
+unroll :: Mono (Either f IntVar) ctx -> UTerm (MonoF f ctx) IntVar
 unroll (Var x)          = UTerm (VarF x)
 unroll (Free (Left f))  = UTerm (FreeF f)
 unroll (Free (Right v)) = UVar v

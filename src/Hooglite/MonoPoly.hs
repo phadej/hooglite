@@ -1,137 +1,151 @@
 module Hooglite.MonoPoly where
 
-import Control.Monad       (ap)
 import Control.Unification (Unifiable (..))
 import GHC.Generics        (Generic1)
-import Data.String (IsString (..))
+import Data.String         (IsString (..))
+import DeBruijn            (Var (VZ), Ctx, EmptyCtx, S, unvar, Renamable (..), weaken, keepRen, Env (..), lookupEnv)
+import Data.Kind           (Type)
 
 import qualified Text.PrettyPrint as PP
 
 import Hooglite.MonoPoly.Name
 import Hooglite.MonoPoly.Pretty
-import Hooglite.MonoPoly.Var
 
 -------------------------------------------------------------------------------
 -- Mono
 -------------------------------------------------------------------------------
 
 -- | Mono-types.
-data Mono n a
+type Mono :: Type -> Ctx -> Type
+data Mono a n
     = Var (Var n)
     | Free a
-    | Arr (Mono n a) (Mono n a)
-    | App (Mono n a) (Mono n a)
-  deriving (Eq, Show, Functor, Foldable, Traversable)
+    | Arr (Mono a n) (Mono a n)
+    | App (Mono a n) (Mono a n)
+  deriving (Eq, Show)
 
-instance Applicative (Mono n) where
-    pure = Free
-    (<*>) = ap
+bindMono :: Mono a n -> (a -> Mono b n) -> Mono b n
+bindMono (Var x)   _ = Var x
+bindMono (Free x)  k = k x
+bindMono (Arr a b) k = Arr (bindMono a k) (bindMono b k)
+bindMono (App f a) k = App (bindMono f k) (bindMono a k)
 
-instance Monad (Mono n) where
-    return = pure
-
-    Var x   >>= _ = Var x
-    Free x  >>= k = k x
-    Arr a b >>= k = Arr (a >>= k) (b >>= k)
-    App f a >>= k = App (f >>= k) (a >>= k)
-
-substMono :: (Var n -> Mono m a) -> Mono n a -> Mono m a
+substMono :: (Var n -> Mono a m) -> Mono a n -> Mono a m
 substMono s (Var x)   = s x
 substMono _ (Free x)  = Free x
 substMono s (Arr a b) = Arr (substMono s a) (substMono s b)
 substMono s (App f a) = App (substMono s f) (substMono s a)
 
-instance Renamable Mono where
-    r <@> m = substMono (Var . renameVar r) m
+instance Renamable (Mono a) where
+    rename r m = substMono (Var . rename r) m
 
-instance IsString a => IsString (Mono n a) where
+instance IsString a => IsString (Mono a n) where
     fromString = Free . fromString
+
+foldrMono :: (a -> b -> b) -> b -> Mono a ctx -> b
+foldrMono _ z (Var _) = z
+foldrMono f z (Free x) = f x z
+foldrMono f z (App a b) = foldrMono f (foldrMono f z b) a 
+foldrMono f z (Arr a b) = foldrMono f (foldrMono f z b) a
+
+mapMono :: (a -> b) -> Mono a ctx -> Mono b ctx
+mapMono _ (Var x) = Var x
+mapMono f (Free x) = Free (f x)
+mapMono f (Arr a b) = Arr (mapMono f a) (mapMono f b)
+mapMono f (App a b) = App (mapMono f a) (mapMono f b)
 
 -------------------------------------------------------------------------------
 -- Poly
 -------------------------------------------------------------------------------
 
-data Poly n a
-    = Mono (Mono n a)             -- ^ monotypes
-    | Poly IName (Poly (S n) a)   -- ^ forall.
-  deriving (Eq, Show, Functor, Foldable, Traversable)
+type Poly :: Type -> Ctx -> Type
+data Poly a n
+    = Mono (Mono a n)             -- ^ monotypes
+    | Poly IName (Poly a (S n))   -- ^ forall.
+  deriving (Eq, Show)
 
-substPoly :: (Var n -> Mono m a) -> Poly n a -> Poly m a
+substPoly :: (Var n -> Mono a m) -> Poly a n -> Poly a m
 substPoly s (Mono a)   = Mono (substMono s a)
-substPoly s (Poly n a) = Poly n (substPoly (unvar (Var VZ) ((weaken <@>) . s)) a)
+substPoly s (Poly n a) = Poly n (substPoly (unvar (Var VZ) (weaken . s)) a)
 
 infixl 4 >>==
-(>>==) :: Poly n a -> (a -> Mono n b) -> Poly n b
-Mono a   >>== k = Mono (a >>= k)
-Poly n a >>== k = Poly n (a >>== (weaken <@>) . k)
+(>>==) :: Poly a n -> (a -> Mono b n) -> Poly b n
+Mono a   >>== k = Mono (bindMono a k)
+Poly n a >>== k = Poly n (a >>== weaken . k)
 
-instance Renamable Poly where
-    r <@> Mono a   = Mono (r <@> a)
-    r <@> Poly n a = Poly n (liftRen r <@> a)
+instance Renamable (Poly a) where
+    rename r (Mono a)   = Mono (rename r a)
+    rename r (Poly n a) = Poly n (rename (keepRen r) a)
 
-forall_ :: Name -> Poly n Name -> Poly n Name
-forall_ n p = Poly (IName n) $ weaken <@> p >>== \n' ->
+forall_ :: Name -> Poly Name n -> Poly Name n
+forall_ n p = Poly (IName n) $ weaken p >>== \n' ->
     if n == n'
     then Var VZ
     else Free n'
 
-instantiate :: Mono n a -> Poly (S n) a -> Poly n a
+instantiate :: Mono a n -> Poly a (S n) -> Poly a n
 instantiate x = substPoly (unvar x Var)
 
-
-instance IsString a => IsString (Poly n a) where
+instance IsString a => IsString (Poly a n) where
     fromString = Mono . fromString
+
+foldrPoly :: (a -> b -> b) -> b -> Poly a ctx -> b
+foldrPoly f z (Mono x)   = foldrMono f z x
+foldrPoly f z (Poly _ x) = foldrPoly f z x
+
+mapPoly :: (a -> b) -> Poly a ctx -> Poly b ctx
+mapPoly f (Mono x)   = Mono (mapMono f x)
+mapPoly f (Poly n x) = Poly n (mapPoly f x)
 
 -------------------------------------------------------------------------------
 -- MonoF
 -------------------------------------------------------------------------------
 
 -- | Base-functor of 'Mono'.
-data MonoF n a b
+type MonoF :: Type -> Ctx -> Type -> Type
+data MonoF a n b
     = VarF (Var n)
     | FreeF a
     | ArrF b b
     | AppF b b
   deriving (Eq, Show, Functor, Foldable, Traversable, Generic1)
 
-instance Eq a => Unifiable (MonoF n a) where
-
+instance Eq a => Unifiable (MonoF a n) where
 
 -------------------------------------------------------------------------------
 -- Pretty
 -------------------------------------------------------------------------------
 
-instance ToName a => Pretty (Mono n a) where
+instance (ToName a, EmptyCtx ~ ctx) => Pretty (Mono a ctx) where
     ppr t = runNameM $ do
-        let t' = fmap toName t
-        usedNames t'
-        pprMono 0 t' 
+        usedNames (foldrMono (:) [] t)
+        pprMono EmptyEnv 0 t 
 
-pprMono :: Int -> Mono n Name -> NameM PP.Doc
-pprMono _ (Var x)   = return $ ppr x
-pprMono _ (Free x)  = return $ PP.text (pretty x)
-pprMono d (App f t) = ppParen (d >= 11) $ do
-    f' <- pprMono 10 f
-    t' <- pprMono 11 t
+pprMono :: ToName a => Env n Name -> Int -> Mono a n -> NameM PP.Doc
+pprMono env _ (Var x)   = return $ ppr $ lookupEnv x env
+pprMono _   _ (Free x)  = return $ ppr $ toName x
+pprMono env d (App f t) = ppParen (d >= 11) $ do
+    f' <- pprMono env 10 f
+    t' <- pprMono env 11 t
     return $ f' <+> t'
-pprMono d (Arr a b)  = ppParen (d >= 2) $ do
-    a' <- pprMono 2 a
-    b' <- pprMono 1 b
+pprMono env d (Arr a b)  = ppParen (d >= 2) $ do
+    a' <- pprMono env 2 a
+    b' <- pprMono env 1 b
     return $ a' <+> PP.text "->" <+> b'
 
-instance ToName a => Pretty (Poly n a) where
+instance (ToName a, EmptyCtx ~ ctx) => Pretty (Poly a ctx) where
     ppr t = runNameM $ do
-        let t' = fmap toName t
-        usedNames t'
-        pprPoly 0 t' 
+        usedNames (foldrPoly (:) [] t)
+        pprPoly EmptyEnv 0 t 
 
-pprPoly :: Int -> Poly n Name -> NameM PP.Doc
-pprPoly d = go [] where
-    go [] (Mono a) = pprMono d a
-    go ns (Mono a) = do
-        a' <- pprMono 0 a
+pprPoly :: forall a ctx. ToName a => Env ctx Name -> Int -> Poly a ctx -> NameM PP.Doc
+pprPoly env0 d = go env0 [] where
+    go :: Env ctx' Name -> [PP.Doc] -> Poly a ctx' -> NameM PP.Doc
+    go env [] (Mono a) = pprMono env d a
+    go env ns (Mono a) = do
+        a' <- pprMono env 0 a
         return $ "forall" <+> PP.hsep (reverse ns) PP.<> "." <+> a'
 
-    go ns (Poly (IName n) a) = do
+    go env ns (Poly (IName n) a) = do
         n' <- freshName n
-        go (ppr n' : ns) (instantiate (Free n') a)
+        go (n' ::: env) (ppr n' : ns) a
