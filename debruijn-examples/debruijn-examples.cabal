@@ -1,5 +1,5 @@
 cabal-version:      2.4
-name:               debruijn
+name:               debruijn-examples
 version:            0.20230131
 license:            BSD-3-Clause
 license-file:       LICENSE
@@ -27,24 +27,11 @@ library
     , base        ^>=4.16.3.0
 
   -- rest of the dependencies
-  build-depends:  
-    , fin                ^>=0.2.1
-    , skew-list
+  build-depends:
+    , debruijn-safe
 
   exposed-modules:
-    DeBruijn
-    DeBruijn.Ctx
-    DeBruijn.Idx
-    DeBruijn.Env
-    DeBruijn.Renaming
-    DeBruijn.Size
-    DeBruijn.Lvl
-
-  other-modules:
-    DeBruijn.Internal.Env
-    DeBruijn.Internal.Idx
-    DeBruijn.Internal.Size
-    DeBruijn.Internal.Lvl
+    DeBruijn.LC
 
   default-extensions:
     BangPatterns

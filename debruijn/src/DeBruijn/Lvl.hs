@@ -3,6 +3,9 @@ module DeBruijn.Lvl (
     lvlToIdx,
     sinkLvl,
     lvlZ,
+    Sinkable (..),
+    sink,
+    mapSink,
 ) where
 
 import DeBruijn.Internal.Lvl

@@ -5,10 +5,14 @@ module DeBruijn.Internal.Lvl (
     lvlToIdx,
     sinkLvl,
     lvlZ,
+    Sinkable (..),
+    sink,
+    mapSink,
 ) where
 
-import Data.Kind    (Type)
+import Data.Kind    (Constraint, Type)
 import Data.Coerce (coerce)
+import Unsafe.Coerce (unsafeCoerce)
 
 import DeBruijn.Ctx
 import DeBruijn.Internal.Idx
@@ -29,3 +33,15 @@ lvlZ (UnsafeSize s) = UnsafeLvl s
 -- | Sink 'Lvl' into a larger context.
 sinkLvl :: Lvl n -> Lvl (S n)
 sinkLvl = coerce
+
+type Sinkable :: (Ctx -> Type) -> Constraint
+class Sinkable t where
+    mapLvl :: (Lvl ctx -> Lvl ctx') -> t ctx -> t ctx'
+
+instance Sinkable Lvl where mapLvl = id
+
+sink :: Sinkable t => t ctx -> t (S ctx)
+sink = unsafeCoerce
+
+mapSink :: (Functor f, Sinkable t) => f (t ctx) -> f (t (S ctx))
+mapSink = unsafeCoerce
