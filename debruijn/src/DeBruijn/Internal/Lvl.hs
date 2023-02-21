@@ -22,6 +22,9 @@ import DeBruijn.Internal.Size
 type Lvl :: Ctx -> Type
 type role Lvl nominal
 newtype Lvl ctx = UnsafeLvl { _unLvl :: Int }
+  deriving (Eq, Ord, Show)
+
+-- TODO: Show
 
 -- | Convert level to index.
 lvlToIdx :: Size ctx -> Lvl ctx -> Idx ctx

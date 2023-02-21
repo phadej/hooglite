@@ -2,40 +2,43 @@ module DeBruijn.Lvl (
     Lvl,
     lvlToIdx,
     lvlZ,
-    sinkLvl,  
+    sinkLvl,
+    Sinkable (..),
+    sink,
+    mapSink,
 ) where
 
-import Data.Kind (Type)
+import Data.Kind (Constraint, Type)
 
 import DeBruijn.Ctx
 import DeBruijn.Idx
 import DeBruijn.Size
 
+-- | de Bruijn levels.
+--
+-- @forall ctx'. 'Size' ctx' -> LE ctx ctx' -> 'Idx' ctx'@
 type Lvl :: Ctx -> Type
 type role Lvl nominal
-newtype Lvl ctx = MkLvl (forall ctx'. Size ctx' -> LE ctx ctx' -> Idx ctx')
-
-type LE :: Ctx -> Ctx -> Type
-data LE ctx ctx' where
-    LERefl :: LE ctx ctx
-    LENext :: LE ctx ctx' -> LE ctx (S ctx')
-
-lePrev :: LE (S ctx) ctx' -> LE ctx ctx'
-lePrev LERefl     = LENext LERefl
-lePrev (LENext p) = LENext $ lePrev p
+newtype Lvl ctx = MkLvl (Idx ctx)
+  deriving (Eq, Ord, Show)
 
 lvlToIdx :: Size ctx -> Lvl ctx -> Idx ctx
-lvlToIdx s (MkLvl f) = f s LERefl 
+lvlToIdx _ (MkLvl x) = x
 
 sinkLvl :: Lvl ctx -> Lvl (S ctx)
-sinkLvl (MkLvl f) = MkLvl (\size le -> f size (lePrev le))
+sinkLvl (MkLvl i) = MkLvl (IS i)
 
 lvlZ :: Size ctx -> Lvl (S ctx)
-lvlZ size = MkLvl $ go size where
-    go :: Size ctx -> Size ctx' -> LE (S ctx) ctx' -> Idx ctx'
-    go ctx _         LERefl      = sizeToIdx ctx
-    go ctx (SS ctx') (LENext le) = IS $ go ctx ctx' le
+lvlZ _ = MkLvl IZ
 
-sizeToIdx :: Size ctx -> Idx (S ctx)
-sizeToIdx SZ     = IZ
-sizeToIdx (SS n) = IS (sizeToIdx n)
+type Sinkable :: (Ctx -> Type) -> Constraint
+class Sinkable t where
+    mapLvl :: (Lvl ctx -> Lvl ctx') -> t ctx -> t ctx'
+
+instance Sinkable Lvl where mapLvl = id
+
+sink :: Sinkable t => t ctx -> t (S ctx)
+sink = mapLvl sinkLvl
+
+mapSink :: (Functor f, Sinkable t) => f (t ctx) -> f (t (S ctx))
+mapSink = fmap sink

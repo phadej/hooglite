@@ -28,7 +28,7 @@ library
 
   -- rest of the dependencies
   build-depends:
-    , debruijn-safe
+    , debruijn
 
   exposed-modules:
     DeBruijn.LC
