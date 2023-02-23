@@ -1,4 +1,7 @@
-module DeBruijn.Size where
+module DeBruijn.Size (
+    Size (SZ, SS),
+    unSS,
+) where
 
 import Data.Kind (Type)
 
@@ -9,3 +12,6 @@ type Size :: Ctx -> Type
 data Size ctx where
     SZ :: Size EmptyCtx
     SS :: Size ctx -> Size (S ctx)
+
+unSS :: Size (S ctx) -> Size ctx
+unSS (SS x) = x

@@ -3,13 +3,25 @@ module DeBruijn.LC where
 import DeBruijn
 import Data.Kind (Type)
 
+newtype Name = Name String
+  deriving (Eq, Ord, Show)
+
+type Raw :: Type
+data Raw where
+    RLam :: Name -> Raw -> Raw
+    RPie :: Name -> Raw -> Raw -> Raw
+    RTyp :: Raw
+    RVar :: Name -> Raw
+    RApp :: Raw -> Raw -> Raw
+    RAnn :: Raw -> Raw
+
 -- | Term types are checked
 type Term :: Ctx -> Type
 data Term ctx where
     Lam :: Term (S ctx) -> Term ctx
     Pie :: Term ctx -> Term (S ctx) -> Term ctx
     Typ :: Term ctx
-    Coe :: Elim ctx -> Term ctx
+    Emb :: Elim ctx -> Term ctx
 
 -- | Elimination types are inferred
 type Elim :: Ctx -> Type
@@ -17,6 +29,7 @@ data Elim ctx where
    Var :: Idx ctx -> Elim ctx
    App :: Elim ctx -> Term ctx -> Elim ctx
    Ann :: Term ctx -> Term ctx -> Elim ctx
+   Let :: Elim ctx -> Elim (S ctx) -> Elim ctx
 
 deriving instance Show (Term ctx)
 deriving instance Show (Elim ctx)
@@ -56,7 +69,7 @@ eval :: EvalEnv ctx ctx' -> Term ctx -> Val ctx'
 eval env (Lam t)   = VLam (Closure env t)
 eval _   Typ       = VTyp
 eval env (Pie a b) = VPie (eval env a) (Closure env b)
-eval env (Coe e)   = eval' env e
+eval env (Emb e)   = eval' env e
 
 eval' :: EvalEnv ctx ctx' -> Elim ctx -> Val ctx'
 eval' env (Var x)   = lookupEnv x env
@@ -67,6 +80,7 @@ eval' env (App f t) = case eval' env f of
     VTyp         -> VErr "Typ applied"
     VPie _ _     -> VErr "Pi applied"
     VErr msg     -> VErr msg
+eval' env (Let t s) = eval' (env :> eval' env t) s
 
 type Nf :: Ctx -> Type
 data Nf ctx where
@@ -114,11 +128,17 @@ data InferCtx ctx ctx' = InferCtx
     , size   :: Size ctx'
     }
 
+sinkInferCtx :: InferCtx ctx ctx' -> InferCtx ctx (S ctx')
+sinkInferCtx (InferCtx e t s) = InferCtx (mapSink e) (mapSink t) (SS s)
+
 emptyInferCtx :: InferCtx EmptyCtx EmptyCtx
 emptyInferCtx = InferCtx EmptyEnv EmptyEnv SZ 
 
 bind :: InferCtx ctx ctx' -> Val ctx' -> InferCtx (S ctx) (S ctx') 
-bind (InferCtx e t s) x = InferCtx (mapSink e :> val0 s) (mapSink t :> sink x) (SS s)
+bind (sinkInferCtx -> InferCtx e t s) a = InferCtx (e :> val0 (unSS s)) (t :> sink a) s
+
+bind' :: InferCtx ctx ctx' -> Val ctx' -> Val ctx' -> InferCtx (S ctx) ctx'
+bind' (InferCtx e t s) x a = InferCtx (e :> x) (t :> a) s
 
 check :: InferCtx ctx ctx' -> Term ctx -> Val ctx' -> Either String ()
 check ctx (Lam t) (VPie a b) = do
@@ -131,7 +151,7 @@ check ctx (Pie a b) VTyp = do
 check _   (Pie _ _) ty   = Left $ "Pie not Typ: " ++ show ty
 check _   Typ       VTyp = pure ()
 check _   Typ       ty   = Left $ "Typ not Typ: " ++ show ty
-check ctx (Coe e)   a    = do
+check ctx (Emb e)   a    = do
     b <- infer ctx e
     if conv (size ctx) a b
     then pure ()
@@ -151,13 +171,16 @@ infer ctx (Ann t s) = do
     let s' = eval (values ctx) s
     check ctx t s'
     return s'
+infer ctx (Let t s) = do
+    a <- infer ctx t
+    infer (bind' ctx (eval' (values ctx) t) a) s
 
 exampleId :: Elim EmptyCtx
 exampleId = Ann
-    (Lam $ Lam $ Coe $ Var IZ)
-    (Pie Typ $ Pie (Coe (Var IZ)) (Coe (Var (IS IZ))))
+    (Lam $ Lam $ Emb $ Var IZ)
+    (Pie Typ $ Pie (Emb (Var IZ)) (Emb (Var (IS IZ))))
 
 exampleWrong :: Elim EmptyCtx
 exampleWrong = Ann
-    (Lam $ Coe $ Var IZ)
-    (Pie Typ $ Pie (Coe (Var IZ)) (Coe (Var (IS IZ))))
+    (Lam $ Emb $ Var IZ)
+    (Pie Typ $ Pie (Emb (Var IZ)) (Emb (Var (IS IZ))))

@@ -1,5 +1,6 @@
 module DeBruijn.Internal.Size (
-    Size (SZ, SS, UnsafeSize)  
+    Size (SZ, SS, UnsafeSize),
+    unSS,
 ) where
 
 import Data.Kind (Type)
@@ -37,3 +38,6 @@ pattern SS n <- (upSize -> SS' n) where
     SS n = UnsafeSize (_indexSize n + 1)
 
 {-# COMPLETE SZ, SS #-}
+
+unSS :: Size (S ctx) -> Size ctx
+unSS (SS x) = x
