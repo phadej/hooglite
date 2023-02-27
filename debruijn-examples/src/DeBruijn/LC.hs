@@ -3,18 +3,6 @@ module DeBruijn.LC where
 import DeBruijn
 import Data.Kind (Type)
 
-newtype Name = Name String
-  deriving (Eq, Ord, Show)
-
-type Raw :: Type
-data Raw where
-    RLam :: Name -> Raw -> Raw
-    RPie :: Name -> Raw -> Raw -> Raw
-    RTyp :: Raw
-    RVar :: Name -> Raw
-    RApp :: Raw -> Raw -> Raw
-    RAnn :: Raw -> Raw
-
 -- | Term types are checked
 type Term :: Ctx -> Type
 data Term ctx where

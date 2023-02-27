@@ -25,13 +25,20 @@ library
   -- GHC-boot libraries
   build-depends:
     , base        ^>=4.16.3.0
+    , bytestring
+    , parsec
+    , pretty
 
   -- rest of the dependencies
   build-depends:
     , debruijn
+    , text-short
 
   exposed-modules:
     DeBruijn.LC
+    MiniTT.Parser
+    MiniTT.Lexer
+    MiniTT.Raw
 
   default-extensions:
     BangPatterns
@@ -40,6 +47,9 @@ library
     DeriveTraversable
     DerivingStrategies
     EmptyCase
+    FlexibleInstances
+    FlexibleContexts
+    FunctionalDependencies
     GADTs
     GeneralizedNewtypeDeriving
     OverloadedStrings
