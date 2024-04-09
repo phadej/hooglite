@@ -23,6 +23,7 @@ import GHC.Hs.Decls     (HsDataDefn (..), HsDecl (..), TyClDecl (..))
 import GHC.Types.SrcLoc (GenLocated (L))
 
 import Language.Haskell.GhclibParserEx.GHC.Parser (parseDeclaration)
+import Language.Haskell.Syntax.Decls (DataDefnCons (..))
 
 import qualified Data.Map.Strict as Map
 
@@ -121,7 +122,7 @@ parseItem str = first unlines $
         first singleton $ toDeclaration decl LDecl
 
     parseConstructor
-        | Right (L _ (TyClD _ (DataDecl { tcdDataDefn = HsDataDefn { dd_cons = [L _ d]}}))) <- parse parseDeclaration $ "data Data where " ++ str
+        | Right (L _ (TyClD _ (DataDecl { tcdDataDefn = HsDataDefn { dd_cons = DataTypeCons False [L _ d]}}))) <- parse parseDeclaration $ "data Data where " ++ str
         = first singleton $ conToDeclaration d LDecl
 
         | otherwise
