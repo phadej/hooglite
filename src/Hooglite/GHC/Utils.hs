@@ -2,14 +2,14 @@ module Hooglite.GHC.Utils where
 
 import Data.Data            (Data)
 import Data.List            (foldl')
-import GHC.Driver.Session   (DynFlags, defaultDynFlags, xopt_set)
-import GHC.Parser.Lexer     (ParseResult (..), PState (errors))
-import GHC.Utils.Outputable (Outputable)
-import GHC.Types.Error      (getMessages)
-import GHC.Utils.Error      (pprMsgEnvelopeBagWithLoc)
 import GHC.Driver.Ppr       (showPpr)
+import GHC.Driver.Session   (DynFlags, defaultDynFlags, xopt_set)
+import GHC.Parser.Lexer     (PState (errors), ParseResult (..))
+import GHC.Types.Error      (NoDiagnosticOpts (..), getMessages)
+import GHC.Utils.Error      (pprMsgEnvelopeBagWithLoc)
+import GHC.Utils.Outputable (Outputable)
 
-import Language.Haskell.GhclibParserEx.GHC.Settings.Config (fakeLlvmConfig, fakeSettings)
+import Language.Haskell.GhclibParserEx.GHC.Settings.Config (fakeSettings)
 
 import qualified GHC.Hs.Dump
 import qualified GHC.LanguageExtensions.Type as LangExt
@@ -19,7 +19,7 @@ import qualified GHC.LanguageExtensions.Type as LangExt
 -------------------------------------------------------------------------------
 
 fakeDynFlags :: DynFlags
-fakeDynFlags = defaultDynFlags fakeSettings fakeLlvmConfig
+fakeDynFlags = defaultDynFlags fakeSettings
 
 fakeShowPpr :: Outputable a => a -> String
 fakeShowPpr = showPpr fakeDynFlags
@@ -62,4 +62,4 @@ parse p s = case p s dynFlags of
     POk _ x       -> Right x
     PFailed pstate -> do
         let es = errors pstate
-        Left $ map fakeShowPpr $ pprMsgEnvelopeBagWithLoc $ getMessages es
+        Left $ map fakeShowPpr $ pprMsgEnvelopeBagWithLoc NoDiagnosticOpts $ getMessages es

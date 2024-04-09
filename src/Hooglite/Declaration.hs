@@ -2,13 +2,14 @@
 module Hooglite.Declaration where
 
 import Control.Monad    (join)
+import Data.Foldable    (toList)
 import GHC.Hs.Extension (GhcPs)
 import GHC.Types.SrcLoc (GenLocated (L))
 
-import qualified GHC.Hs.Binds          as GHC
-import qualified GHC.Hs.Decls          as GHC
-import qualified GHC.Hs.Type           as GHC
-import qualified GHC.Types.SrcLoc      as GHC
+import qualified GHC.Hs.Binds     as GHC
+import qualified GHC.Hs.Decls     as GHC
+import qualified GHC.Hs.Type      as GHC
+import qualified GHC.Types.SrcLoc as GHC
 
 import Hooglite.GHC.Utils
 import Hooglite.MonoPoly.Name
@@ -65,8 +66,8 @@ sigToDeclaration sig _ = Left $ "sigToDeclaration " ++ showAstData sig
 
 conToDeclaration :: GHC.ConDecl GhcPs -> (Name -> Declaration -> r) -> Either String [r]
 conToDeclaration d@GHC.ConDeclGADT { GHC.con_names = names, GHC.con_g_args = details, GHC.con_res_ty = ty } mk = Right
-    [ mk (toName name) $ ConD (fmap genType $ join $ apps_ <$> convType ty <*> details') (fakeShowPpr (d { GHC.con_names = [L l name] } ))
-    | L l name <- names
+    [ mk (toName name) $ ConD (fmap genType $ join $ apps_ <$> convType ty <*> details') (fakeShowPpr (d { GHC.con_names = pure (L l name) } ))
+    | L l name <- toList names
     ]
   where
     details' :: Maybe [Ty]
